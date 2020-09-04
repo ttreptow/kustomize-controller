@@ -63,6 +63,10 @@ type KustomizationSpec struct {
 	// +required
 	SourceRef CrossNamespaceObjectReference `json:"sourceRef"`
 
+	// Name of the context to use in the provided kubeconfig (with --kubeconfig), if any
+	// +optional
+	TargetContext string `json:"targetContext,omitempty"`
+
 	// This flag tells the controller to suspend subsequent kustomize executions,
 	// it does not apply to already started executions. Defaults to false.
 	// +optional

@@ -454,8 +454,9 @@ func (r *KustomizationReconciler) validate(kustomization kustomizev1.Kustomizati
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s --dry-run=%s",
-		dirPath, kustomization.GetUID(), kustomization.GetTimeout().String(), kustomization.Spec.Validation)
+	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s --dry-run=%s --context=%s",
+		dirPath, kustomization.GetUID(), kustomization.GetTimeout().String(), kustomization.Spec.Validation,
+		kustomization.Spec.TargetContext)
 	command := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -513,8 +514,8 @@ func (r *KustomizationReconciler) apply(kustomization kustomizev1.Kustomization,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s",
-		dirPath, kustomization.GetUID(), kustomization.Spec.Interval.Duration.String())
+	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s --context=%s",
+		dirPath, kustomization.GetUID(), kustomization.Spec.Interval.Duration.String(), kustomization.Spec.TargetContext)
 
 	// impersonate SA
 	if kustomization.Spec.ServiceAccount != nil {
@@ -622,16 +623,16 @@ func (r *KustomizationReconciler) checkHealth(kustomization kustomizev1.Kustomiz
 	var alerts string
 
 	for _, check := range kustomization.Spec.HealthChecks {
-		cmd := fmt.Sprintf("until kubectl -n %s get %s %s ; do sleep 2; done",
-			check.Namespace, check.Kind, check.Name)
+		cmd := fmt.Sprintf("until kubectl -n %s get %s %s --context=%s; do sleep 2; done",
+			check.Namespace, check.Kind, check.Name, kustomization.Spec.TargetContext)
 		command := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 		if _, err := command.CombinedOutput(); err != nil {
 			return fmt.Errorf("health check timeout for %s '%s/%s': %w",
 				check.Kind, check.Namespace, check.Name, err)
 		}
 
-		cmd = fmt.Sprintf("kubectl -n %s rollout status %s %s --timeout=%s",
-			check.Namespace, check.Kind, check.Name, kustomization.GetTimeout())
+		cmd = fmt.Sprintf("kubectl -n %s rollout status %s %s --timeout=%s --context=%s",
+			check.Namespace, check.Kind, check.Name, kustomization.GetTimeout(), kustomization.Spec.TargetContext)
 		command = exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 		output, err := command.CombinedOutput()
 		if err != nil {
