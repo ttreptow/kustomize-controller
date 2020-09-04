@@ -58,6 +58,7 @@ type KustomizationReconciler struct {
 	Scheme                *runtime.Scheme
 	EventRecorder         kuberecorder.EventRecorder
 	ExternalEventRecorder *recorder.EventRecorder
+	CustomKubeconfig      string
 }
 
 // +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=get;list;watch;create;update;patch;delete
@@ -454,9 +455,9 @@ func (r *KustomizationReconciler) validate(kustomization kustomizev1.Kustomizati
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s --dry-run=%s --context=%s",
+	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s --dry-run=%s --context=%s --kubeconfig=%s",
 		dirPath, kustomization.GetUID(), kustomization.GetTimeout().String(), kustomization.Spec.Validation,
-		kustomization.Spec.TargetContext)
+		kustomization.Spec.TargetContext, r.CustomKubeconfig)
 	command := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -514,8 +515,9 @@ func (r *KustomizationReconciler) apply(kustomization kustomizev1.Kustomization,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s --context=%s",
-		dirPath, kustomization.GetUID(), kustomization.Spec.Interval.Duration.String(), kustomization.Spec.TargetContext)
+	cmd := fmt.Sprintf("cd %s && kubectl apply -f %s.yaml --timeout=%s --context=%s --kubeconfig=%s",
+		dirPath, kustomization.GetUID(), kustomization.Spec.Interval.Duration.String(), kustomization.Spec.TargetContext,
+		r.CustomKubeconfig)
 
 	// impersonate SA
 	if kustomization.Spec.ServiceAccount != nil {
@@ -623,16 +625,17 @@ func (r *KustomizationReconciler) checkHealth(kustomization kustomizev1.Kustomiz
 	var alerts string
 
 	for _, check := range kustomization.Spec.HealthChecks {
-		cmd := fmt.Sprintf("until kubectl -n %s get %s %s --context=%s; do sleep 2; done",
-			check.Namespace, check.Kind, check.Name, kustomization.Spec.TargetContext)
+		cmd := fmt.Sprintf("until kubectl -n %s get %s %s --context=%s --kubeconfig=%s; do sleep 2; done",
+			check.Namespace, check.Kind, check.Name, kustomization.Spec.TargetContext, r.CustomKubeconfig)
 		command := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 		if _, err := command.CombinedOutput(); err != nil {
 			return fmt.Errorf("health check timeout for %s '%s/%s': %w",
 				check.Kind, check.Namespace, check.Name, err)
 		}
 
-		cmd = fmt.Sprintf("kubectl -n %s rollout status %s %s --timeout=%s --context=%s",
-			check.Namespace, check.Kind, check.Name, kustomization.GetTimeout(), kustomization.Spec.TargetContext)
+		cmd = fmt.Sprintf("kubectl -n %s rollout status %s %s --timeout=%s --context=%s --kubeconfig=%s",
+			check.Namespace, check.Kind, check.Name, kustomization.GetTimeout(), kustomization.Spec.TargetContext,
+			r.CustomKubeconfig)
 		command = exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 		output, err := command.CombinedOutput()
 		if err != nil {

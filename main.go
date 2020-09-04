@@ -51,6 +51,7 @@ func main() {
 	var (
 		metricsAddr          string
 		eventsAddr           string
+		customKubeconfig     string
 		enableLeaderElection bool
 		concurrent           int
 		requeueDependency    time.Duration
@@ -60,6 +61,7 @@ func main() {
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&eventsAddr, "events-addr", "", "The address of the events receiver.")
+	flag.StringVar(&customKubeconfig, "custom-kubeconfig", "", "Path to a kubeconfig file to use when apply resources")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -109,6 +111,7 @@ func main() {
 		Scheme:                mgr.GetScheme(),
 		EventRecorder:         mgr.GetEventRecorderFor("kustomize-controller"),
 		ExternalEventRecorder: eventRecorder,
+		CustomKubeconfig:      customKubeconfig,
 	}).SetupWithManager(mgr, controllers.KustomizationReconcilerOptions{
 		MaxConcurrentReconciles:   concurrent,
 		DependencyRequeueInterval: requeueDependency,
